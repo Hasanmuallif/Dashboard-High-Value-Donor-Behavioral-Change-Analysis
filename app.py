@@ -322,7 +322,7 @@ elif menu == "Pergerakan Donatur & Action Plan":
         fig_area.update_layout(hovermode="x unified")
         st.plotly_chart(fig_area, use_container_width=True)
 
-        # --- SUMMARY & ACTION PLAN ---
+       # --- SUMMARY & ACTION PLAN ---
         st.markdown("---")
         st.markdown("### 📋 Evaluasi Periode & Action Plan")
         
@@ -337,7 +337,22 @@ elif menu == "Pergerakan Donatur & Action Plan":
             }
             fig_status = px.pie(status_count, names='Status', values='Jumlah', hole=0.5,
                                 color='Status', color_discrete_map=status_colors, title=f"Proporsi {periode_awal} ➡️ {periode_akhir}")
-            fig_status.update_traces(textinfo='percent+label', pull=[0.05 if s == 'Hilang (Churn)' else 0 for s in status_count['Status']])
+            
+            fig_status.update_traces(
+                textinfo='percent+label', 
+                textposition='inside', # Paksa teks berada di dalam irisan
+                hovertemplate='<b>%{label}</b><br>Jumlah Donatur: %{value}<br>Persentase: %{percent}<extra></extra>',
+                pull=[0.05 if s == 'Hilang (Churn)' else 0 for s in status_count['Status']]
+            )
+            
+            fig_status.update_layout(
+                uniformtext_minsize=11, 
+                uniformtext_mode='hide', # Otomatis menyembunyikan teks jika irisan terlalu kecil (mencegah overlap)
+                margin=dict(t=40, b=10, l=10, r=10),
+                showlegend=True
+            )
+            # ---------------------------------------------------------
+            
             st.plotly_chart(fig_status, use_container_width=True)
             
         with c2:
