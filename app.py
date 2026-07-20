@@ -255,7 +255,7 @@ elif menu == "Pergerakan Donatur & Action Plan":
     
     col1, col2, col3 = st.columns(3)
     with col1:
-        agregasi = st.selectbox("Level Agregasi Waktu:", ["Tahunan", "Bulanan", "Harian"])
+        agregasi = st.selectbox("Lihat Berdasarkan :", ["Tahunan", "Bulanan", "Harian"])
     
     res_map = {"Tahunan": "Tahun", "Bulanan": "Bulan", "Harian": "Hari"}
     col_waktu = res_map[agregasi]
@@ -263,9 +263,9 @@ elif menu == "Pergerakan Donatur & Action Plan":
     periode_unik = sorted(data[col_waktu].astype(str).unique())
     
     with col2:
-        periode_awal = st.selectbox("Periode Dasar (T0):", options=periode_unik, index=0)
+        periode_awal = st.selectbox("Dari Periode :", options=periode_unik, index=0)
     with col3:
-        periode_akhir = st.selectbox("Periode Pembanding (T1):", options=periode_unik, index=len(periode_unik)-1)
+        periode_akhir = st.selectbox("Ke Periode :", options=periode_unik, index=len(periode_unik)-1)
         
     if periode_awal == periode_akhir:
         st.warning("Silakan pilih Periode Pembanding yang berbeda dengan Periode Dasar.")
