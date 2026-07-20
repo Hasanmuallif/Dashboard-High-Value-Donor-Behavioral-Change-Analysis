@@ -164,24 +164,30 @@ if menu == "Tren & Perkembangan":
     
     # Menggunakan Total_Juta untuk Y, tetapi menyimpan Total_Donasi asli di custom_data
     fig_trend = px.line(tren_donasi, x=col_waktu, y='Total_Juta', custom_data=['Total_Donasi'],
-                        markers=True, title=f"Tren Donasi ({resolusi})",
+                        title=f"Tren Donasi ({resolusi})",
                         labels={'Total_Juta': 'Total Nominal', col_waktu: 'Periode'})
     
     if resolusi == "Tahunan":
-        # Menampilkan angka penuh (detail) pada titik di atas grafik tahunan
+        # FIX: Tambahkan mode='lines+markers+text' agar tulisan dipaksa muncul
         fig_trend.update_traces(
-            textposition="top center", 
+            mode='lines+markers+text',
             text=[f"Rp {val:,.0f}" for val in tren_donasi['Total_Donasi']], 
-            textfont=dict(size=13, weight='bold'),
-            line=dict(color='#D4AF37')
+            textposition="top center", 
+            textfont=dict(size=13, weight='bold', color='#D4AF37'), # Diberi warna agar menyala di mode gelap
+            marker=dict(size=8),
+            line=dict(color='#D4AF37', width=3)
         )
         fig_trend.update_layout(yaxis_range=[0, tren_donasi['Total_Juta'].max() * 1.2])
     else:
         marker_size = 6 if resolusi == "Bulanan" else 2
-        fig_trend.update_traces(marker=dict(size=marker_size), line=dict(color='#D4AF37'))
+        fig_trend.update_traces(
+            mode='lines+markers', # Untuk bulanan/harian, matikan teks agar tidak bertumpuk
+            marker=dict(size=marker_size), 
+            line=dict(color='#D4AF37', width=3)
+        )
 
     # Hover memanggil customdata[0] agar nominal asli tetap terlihat detail
-    fig_trend.update_traces(line=dict(width=3), hovertemplate='<b>Periode: %{x}</b><br>Total Donasi: <b>Rp %{customdata[0]:,.0f}</b><extra></extra>')
+    fig_trend.update_traces(hovertemplate='<b>Periode: %{x}</b><br>Total Donasi: <b>Rp %{customdata[0]:,.0f}</b><extra></extra>')
     
     # Memasang akhiran " Jt" di sumbu Y
     fig_trend.update_layout(hovermode="x unified", yaxis=dict(ticksuffix=" Jt")) 
