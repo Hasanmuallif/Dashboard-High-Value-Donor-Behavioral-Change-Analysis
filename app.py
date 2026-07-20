@@ -6,7 +6,7 @@ import plotly.graph_objects as go
 from datetime import datetime
 
 # ==========================================
-# 0. KONFIGURASI HALAMAN & TEMA ELEGANT
+# 0. KONFIGURASI HALAMAN & TEMA (ADAPTIVE DARK/LIGHT)
 # ==========================================
 st.set_page_config(
     page_title="Dashboard Analisis Donasi Mizan Amanah",
@@ -15,12 +15,11 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS untuk tema Elegan (Navy Blue & Gold)
+# Custom CSS yang support Dark Mode & Light Mode
 st.markdown("""
     <style>
-    /* Headers berwarna Navy Blue yang elegan */
+    /* Mengatur font tetapi membiarkan Streamlit mengatur warna otomatis (support Dark Mode) */
     h1, h2, h3 {
-        color: #2C3E50 !important;
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
     /* Pembatas (Divider) bernuansa Gold/Champagne */
@@ -28,10 +27,6 @@ st.markdown("""
         border-top: 2px solid #D4AF37 !important;
         border-radius: 5px;
         opacity: 0.7;
-    }
-    /* Metrik angka */
-    [data-testid="stMetricValue"] {
-        color: #2C3E50 !important;
     }
     /* Warna Tab Streamlit */
     .stTabs [data-baseweb="tab-list"] button[aria-selected="true"] {
@@ -54,7 +49,6 @@ st.markdown("""
 # Palet warna elegan untuk grafik
 elegant_colors = ['#2C3E50', '#D4AF37', '#5D6D7E', '#7F8C8D', '#1A5276', '#935116']
 
-# Helper function untuk Header + Logo Kanan Atas
 def display_header(title, description):
     col_title, col_logo = st.columns([5, 1])
     with col_title:
@@ -96,40 +90,70 @@ def load_and_clean_data():
     
     return df
 
-with st.spinner("Memuat data interaktif Mizan Amanah..."):
+with st.spinner("Memuat data Mizan Amanah..."):
     data_raw = load_and_clean_data()
 
 # ==========================================
-# 2. SIDEBAR & FILTER GLOBAL
+# 2. SIDEBAR & FILTER GLOBAL (URUTAN BARU)
 # ==========================================
 col_sb1, col_sb2, col_sb3 = st.sidebar.columns([1, 4, 1])
 with col_sb2:
     st.image("paybill-logo-bifcga-1648801060427.png", width=180)
     
 st.sidebar.markdown("---")
-st.sidebar.subheader("⚙️ Filter Data")
 
+# 1. Navigasi Dashboard (Di Atas)
+menu = st.sidebar.radio(
+    "📂 Navigasi Dashboard",
+    ["Tren & Perkembangan", "Klasifikasi & Segmentasi RFM", "Pergerakan Donatur & Action Plan"]
+)
+st.sidebar.markdown("---")
+
+# 2. Filter Akad & Program (Di Bawah)
+st.sidebar.subheader("⚙️ Filter Data")
 selected_akad = st.sidebar.multiselect("Pilih Akad:", options=data_raw['akad'].dropna().unique(), default=data_raw['akad'].dropna().unique())
 selected_program = st.sidebar.multiselect("Pilih Program:", options=data_raw['program'].dropna().unique(), default=data_raw['program'].dropna().unique())
 
 data = data_raw[(data_raw['akad'].isin(selected_akad)) & (data_raw['program'].isin(selected_program))]
 
-st.sidebar.markdown("---")
-menu = st.sidebar.radio(
-    "📂 Navigasi Dashboard",
-    ["Tren & Perkembangan", "Klasifikasi & Segmentasi RFM", "Pergerakan Donatur & Action Plan"]
-)
+# ==========================================
+# 3. KALKULASI GLOBAL RFM
+# ==========================================
+ref_date = data['tanggal'].max()
+rfm = data.groupby('donor_id').agg(
+    Recency=('tanggal', lambda x: (ref_date - x.max()).days),
+    Frequency=('transaksi_id', 'nunique'),
+    Monetary=('nominal', 'sum')
+).reset_index()
+
+rfm['R_Score'] = pd.qcut(rfm['Recency'], 5, labels=[5, 4, 3, 2, 1], duplicates='drop').astype(int)
+rfm['F_Score'] = pd.qcut(rfm['Frequency'].rank(method='first'), 5, labels=[1, 2, 3, 4, 5]).astype(int)
+rfm['M_Score'] = pd.qcut(rfm['Monetary'], 5, labels=[1, 2, 3, 4, 5], duplicates='drop').astype(int)
+
+def assign_segment(row):
+    R, F, M = row['R_Score'], row['F_Score'], row['M_Score']
+    if R == 5 and F == 1: return 'New Donor'
+    elif R >= 4 and F >= 4 and M >= 4: return 'Premium Donor'
+    elif R >= 4 and F >= 4: return 'Loyal Donor'
+    elif R >= 4 and F >= 2: return 'Active Donor'
+    elif R == 3 and F >= 3: return 'Potential Donor'
+    elif R >= 3 and F <= 2: return 'Occasional Donor'
+    elif R == 2: return 'Dormant Donor'
+    elif R == 1: return 'Lost Donor'
+    else: return 'Reactivated Donor'
+    
+rfm['Segment'] = rfm.apply(assign_segment, axis=1)
 
 # ==========================================
-# 3. KONTEN DASHBOARD
+# 4. KONTEN DASHBOARD
 # ==========================================
 
 if menu == "Tren & Perkembangan":
-    display_header("📈 Tren Perkembangan Donasi & Akad", "Analisis donasi dan partisipasi donatur Mizan Amanah.")
+    display_header("📈 Tren Perkembangan Donasi & Akad", "Analisis partisipasi donatur Mizan Amanah.")
     
     col1, col2 = st.columns([1, 3])
     with col1:
-        resolusi = st.selectbox("Periode Waktu:", ["Tahunan", "Bulanan", "Harian"])
+        resolusi = st.selectbox("Pilih Periode Waktu:", ["Tahunan", "Bulanan", "Harian"])
     
     res_map = {"Tahunan": "Tahun", "Bulanan": "Bulan", "Harian": "Hari"}
     col_waktu = res_map[resolusi]
@@ -141,31 +165,27 @@ if menu == "Tren & Perkembangan":
     tren_donasi[col_waktu] = tren_donasi[col_waktu].astype(str)
     
     st.markdown("### Perkembangan Total Donasi & Donatur")
-    
-    # LOGIKA PENCEGAHAN OVERLAPPING: Hanya tampilkan teks statis untuk "Tahunan"
     text_label = 'Total_Donasi' if resolusi == "Tahunan" else None
     
     fig_trend = px.line(tren_donasi, x=col_waktu, y='Total_Donasi', text=text_label,
                         markers=True, title=f"Tren Donasi ({resolusi})",
-                        labels={'Total_Donasi': 'Total Nominal (Rp)', col_waktu: 'Periode'},
-                        template="plotly_white", color_discrete_sequence=['#2C3E50'])
+                        labels={'Total_Donasi': 'Total Nominal (Rp)', col_waktu: 'Periode'})
     
     if resolusi == "Tahunan":
-        # Atur teks agar berada di atas (top center) dan tidak menabrak garis
-        fig_trend.update_traces(textposition="top center", texttemplate='Rp %{y:,.0f}', textfont=dict(size=14, color='#2C3E50', weight='bold'))
-        # Tambahkan batas atas pada sumbu Y agar teks di titik tertinggi tidak terpotong (Padding 15%)
-        fig_trend.update_layout(yaxis_range=[0, tren_donasi['Total_Donasi'].max() * 1.15])
+        # Format "Juta" untuk tampilan label atas
+        fig_trend.update_traces(
+            textposition="top center", 
+            text=[f"Rp {val/1e6:,.0f} Juta" for val in tren_donasi['Total_Donasi']], 
+            textfont=dict(size=14, weight='bold'),
+            line=dict(color='#D4AF37')
+        )
+        fig_trend.update_layout(yaxis_range=[0, tren_donasi['Total_Donasi'].max() * 1.2])
     else:
-        # Untuk Bulanan dan Harian, sesuaikan ukuran titik agar tidak berdempetan
         marker_size = 6 if resolusi == "Bulanan" else 2
-        fig_trend.update_traces(marker=dict(size=marker_size))
+        fig_trend.update_traces(marker=dict(size=marker_size), line=dict(color='#D4AF37'))
 
-    # Optimasi UI Tooltip (Hover) agar nilai terbaca sangat jelas saat digeser
     fig_trend.update_traces(line=dict(width=3), hovertemplate='<b>Periode: %{x}</b><br>Total Donasi: <b>Rp %{y:,.0f}</b><extra></extra>')
-    fig_trend.update_layout(
-        hovermode="x unified", 
-        hoverlabel=dict(bgcolor="white", font_size=15, font_family="Arial")
-    )
+    fig_trend.update_layout(hovermode="x unified", yaxis_tickformat='20') # Menghindari huruf "M"
     
     st.plotly_chart(fig_trend, use_container_width=True)
     
@@ -175,42 +195,14 @@ if menu == "Tren & Perkembangan":
     fig_akad = px.bar(akad_tren, x=col_waktu, y='nominal', color='akad',
                       title=f"Distribusi Akad per Periode ({resolusi})",
                       labels={'nominal': 'Total Nominal (Rp)', col_waktu: 'Periode'},
-                      template="plotly_white", barmode='stack',
-                      color_discrete_sequence=elegant_colors)
+                      barmode='stack', color_discrete_sequence=elegant_colors)
                       
-    # Tooltip pada bar chart juga diperjelas
     fig_akad.update_traces(hovertemplate='<b>%{x}</b><br>Akad: %{data.name}<br>Total: <b>Rp %{y:,.0f}</b><extra></extra>')
-    fig_akad.update_layout(hovermode="x unified")
+    fig_akad.update_layout(hovermode="x unified", yaxis_tickformat='20')
     st.plotly_chart(fig_akad, use_container_width=True)
 
 elif menu == "Klasifikasi & Segmentasi RFM":
-    display_header("🎯 Klasifikasi & Segmentasi RFM Donatur", "Pemetaan interaktif donatur berdasarkan metrik *Recency, Frequency, dan Monetary*.")
-    
-    ref_date = data['tanggal'].max()
-    
-    rfm = data.groupby('donor_id').agg(
-        Recency=('tanggal', lambda x: (ref_date - x.max()).days),
-        Frequency=('transaksi_id', 'nunique'),
-        Monetary=('nominal', 'sum')
-    ).reset_index()
-    
-    rfm['R_Score'] = pd.qcut(rfm['Recency'], 5, labels=[5, 4, 3, 2, 1], duplicates='drop').astype(int)
-    rfm['F_Score'] = pd.qcut(rfm['Frequency'].rank(method='first'), 5, labels=[1, 2, 3, 4, 5]).astype(int)
-    rfm['M_Score'] = pd.qcut(rfm['Monetary'], 5, labels=[1, 2, 3, 4, 5], duplicates='drop').astype(int)
-    
-    def assign_segment(row):
-        R, F, M = row['R_Score'], row['F_Score'], row['M_Score']
-        if R == 5 and F == 1: return 'New Donor'
-        elif R >= 4 and F >= 4 and M >= 4: return 'Premium Donor'
-        elif R >= 4 and F >= 4: return 'Loyal Donor'
-        elif R >= 4 and F >= 2: return 'Active Donor'
-        elif R == 3 and F >= 3: return 'Potential Donor'
-        elif R >= 3 and F <= 2: return 'Occasional Donor'
-        elif R == 2: return 'Dormant Donor'
-        elif R == 1: return 'Lost Donor'
-        else: return 'Reactivated Donor'
-        
-    rfm['Segment'] = rfm.apply(assign_segment, axis=1)
+    display_header("🎯 Klasifikasi & Segmentasi RFM Donatur", "Pemetaan donatur berdasarkan metrik *Recency, Frequency, dan Monetary*.")
     
     rfm['Total_Score'] = (rfm['R_Score'] + rfm['F_Score'] + rfm['M_Score']) / 3
     def assign_tier(score):
@@ -259,7 +251,7 @@ elif menu == "Klasifikasi & Segmentasi RFM":
         """)
 
 elif menu == "Pergerakan Donatur & Action Plan":
-    display_header("🔄 Pergerakan Donatur & Action Plan", "Pantau retensi dan susun rencana aksi harian, bulanan, atau tahunan.")
+    display_header("🔄 Pergerakan Donatur & Action Plan", "Pantau retensi, pergerakan klasifikasi, dan daftar prioritas donatur (High Value & At-Risk).")
     
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -278,9 +270,9 @@ elif menu == "Pergerakan Donatur & Action Plan":
     if periode_awal == periode_akhir:
         st.warning("Silakan pilih Periode Pembanding yang berbeda dengan Periode Dasar.")
     else:
+        # Kalkulasi Perbandingan
         df_awal = data[data[col_waktu].astype(str) == periode_awal].groupby('donor_id')['nominal'].sum().reset_index()
         df_awal.rename(columns={'nominal': 'Nominal_Awal'}, inplace=True)
-        
         df_akhir = data[data[col_waktu].astype(str) == periode_akhir].groupby('donor_id')['nominal'].sum().reset_index()
         df_akhir.rename(columns={'nominal': 'Nominal_Akhir'}, inplace=True)
         
@@ -295,45 +287,76 @@ elif menu == "Pergerakan Donatur & Action Plan":
             else: return 'Stabil'
             
         df_banding['Status'] = df_banding.apply(cek_status, axis=1)
+        
+        # --- TABEL RANKING (HIGH VALUE & AT-RISK) ---
+        st.markdown("---")
+        st.markdown("### 🏆 Ranking Prioritas Donatur")
+        
+        col_t1, col_t2 = st.columns(2)
+        with col_t1:
+            st.subheader("Top 10 High Value Donors")
+            st.caption("Berdasarkan total histori nominal keseluruhan.")
+            top_high_value = rfm.sort_values('Monetary', ascending=False).head(10)[['donor_id', 'Segment', 'Monetary']]
+            # Format Rupiah
+            top_high_value['Monetary'] = top_high_value['Monetary'].apply(lambda x: f"Rp {x:,.0f}")
+            st.dataframe(top_high_value, use_container_width=True, hide_index=True)
+
+        with col_t2:
+            st.subheader("🚨 At-Risk Donor List")
+            st.caption(f"Donatur bernominal besar di {periode_awal} yang menurun/hilang di {periode_akhir}.")
+            at_risk = df_banding[df_banding['Status'].isin(['Turun', 'Hilang (Churn)'])].sort_values('Nominal_Awal', ascending=False).head(10)[['donor_id', 'Status', 'Nominal_Awal']]
+            at_risk['Nominal_Awal'] = at_risk['Nominal_Awal'].apply(lambda x: f"Rp {x:,.0f}")
+            st.dataframe(at_risk, use_container_width=True, hide_index=True)
+
+        st.markdown("---")
+
+        # --- GRAFIK PERGERAKAN PENDONOR PER BULAN (STACKED AREA) ---
+        st.markdown("### 📊 Tren Pergerakan Segmen Pendonor per Bulan")
+        
+        # Agregasi data aktif per bulan gabung segmentasi global
+        df_area = data.groupby(['Bulan', 'donor_id'])['nominal'].sum().reset_index()
+        df_area = pd.merge(df_area, rfm[['donor_id', 'Segment']], on='donor_id', how='left')
+        area_chart_data = df_area.groupby(['Bulan', 'Segment'])['donor_id'].nunique().reset_index()
+        
+        fig_area = px.area(area_chart_data, x='Bulan', y='donor_id', color='Segment',
+                           title="Jumlah Pendonor Aktif berdasarkan Bulan & Segmen",
+                           labels={'donor_id': 'Jumlah Donatur', 'Bulan': 'Tahun-Bulan'})
+        fig_area.update_layout(hovermode="x unified")
+        st.plotly_chart(fig_area, use_container_width=True)
+
+        # --- SUMMARY & ACTION PLAN ---
+        st.markdown("---")
+        st.markdown("### 📋 Evaluasi Periode & Action Plan")
+        
         status_count = df_banding['Status'].value_counts().reset_index()
         status_count.columns = ['Status', 'Jumlah']
         
-        c1, c2 = st.columns([2, 2])
+        c1, c2 = st.columns([1, 2])
         with c1:
-            st.subheader(f"Proporsi Status: {periode_awal} ➡️ {periode_akhir}")
             status_colors = {
                 'Hilang (Churn)': '#C0392B', 'Turun': '#E67E22', 
                 'Stabil': '#7F8C8D', 'Naik': '#2980B9', 'Baru / Reaktivasi': '#27AE60'
             }
             fig_status = px.pie(status_count, names='Status', values='Jumlah', hole=0.5,
-                                color='Status', color_discrete_map=status_colors)
+                                color='Status', color_discrete_map=status_colors, title=f"Proporsi {periode_awal} ➡️ {periode_akhir}")
             fig_status.update_traces(textinfo='percent+label', pull=[0.05 if s == 'Hilang (Churn)' else 0 for s in status_count['Status']])
             st.plotly_chart(fig_status, use_container_width=True)
             
         with c2:
-            st.subheader("Tabel Rekapitulasi")
-            st.dataframe(status_count, use_container_width=True)
-            st.metric("Net Gain/Loss Donatur Aktif", 
-                      int(df_banding[df_banding['Nominal_Akhir'] > 0]['donor_id'].nunique()) - 
-                      int(df_banding[df_banding['Nominal_Awal'] > 0]['donor_id'].nunique()))
-
-        st.markdown("---")
-        st.markdown("### 📋 Action Plan (Berdasarkan Status Pergerakan)")
-        st.info("**Strategi Operasional Mizan Amanah terhadap Hasil Filter di atas:**")
-        
-        t1, t2, t3 = st.tabs(["📉 Mengatasi 'Turun' & 'Hilang'", "📈 Menjaga 'Naik' & 'Stabil'", "✨ Strategi 'Baru / Reaktivasi'"])
-        
-        with t1:
-            st.markdown("""
-            *   **Identifikasi Penyebab:** Filter daftar donatur yang berstatus **Hilang (Churn)**. Cek kebiasaan donasi mereka (Apakah sebelumnya donasi rutin tiap Ramadan? Jika ya, siapkan tim Telemarketing untuk menghubungi mereka H-30 Ramadan berikutnya).
-            *   **Down-sell Program:** Untuk donatur yang **Turun** nominalnya, jangan dipaksa donasi besar. Tawarkan program subsider yang lebih ringan, seperti "Sedekah Beras Rp 50.000/bulan" agar mereka tetap terbiasa berdonasi.
-            """)
-        with t2:
-            st.markdown("""
-            *   **Apresiasi Langsung:** Donatur yang berstatus **Naik** perlu diberikan apresiasi instan. Tim *Customer Relationship* dapat mengirimkan sertifikat digital "Donatur Inspiratif Bulan Ini" via WhatsApp.
-            *   **Upselling:** Untuk donatur yang **Stabil**, mereka siap ditantang untuk level selanjutnya. Tawarkan program keberlanjutan (seperti Wakaf Sumur Air yang bisa dicicil), alih-alih hanya donasi sekali habis.
-            """)
-        with t3:
-            st.markdown("""
-            *   **Onboarding Process:** Donatur **Baru** memiliki *churn rate* (risiko hilang) tertinggi di transaksi kedua. Pastikan mereka menerima laporan transparan maksimal 7 hari setelah uang mereka disalurkan. Kepercayaan adalah kunci retensi awal.
-            """)
+            st.info("**Strategi Operasional Mizan Amanah terhadap Hasil Evaluasi:**")
+            t1, t2, t3 = st.tabs(["📉 Mengatasi 'Turun' & 'Hilang'", "📈 Menjaga 'Naik' & 'Stabil'", "✨ Strategi 'Baru / Reaktivasi'"])
+            
+            with t1:
+                st.markdown("""
+                *   **Fokus ke Tabel At-Risk:** Hubungi **Top 10 At-Risk Donors** di atas melalui telepon apresiasi (bukan langsung menagih donasi). Tanyakan kabar dan kirimkan update kondisi panti asuhan.
+                *   **Down-sell Program:** Untuk donatur yang **Turun** nominalnya, jangan dipaksa berdonasi besar. Tawarkan program patungan ringan agar ikatan kebiasaan berdonasi tidak putus.
+                """)
+            with t2:
+                st.markdown("""
+                *   **Apresiasi Langsung:** Donatur yang berstatus **Naik** perlu diberikan apresiasi instan. Tim *Customer Relationship* dapat mengirimkan sertifikat digital khusus via WhatsApp.
+                *   **Upselling:** Untuk donatur yang **Stabil**, tawarkan program keberlanjutan (seperti Wakaf Sumur Air yang dicicil), alih-alih hanya donasi instan.
+                """)
+            with t3:
+                st.markdown("""
+                *   **Onboarding Process:** Donatur **Baru** memiliki risiko hilang tertinggi di transaksi berikutnya. Pastikan mereka menerima laporan transparan maksimal 7 hari setelah uang mereka disalurkan. Kepercayaan adalah kunci retensi.
+                """)
