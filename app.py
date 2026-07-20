@@ -142,7 +142,7 @@ rfm['Segment'] = rfm.apply(assign_segment, axis=1)
 # ==========================================
 
 if menu == "Tren & Perkembangan":
-    display_header("📈 Tren Perkembangan Donasi & Akad", "Analisis partisipasi donatur Mizan Amanah.")
+    display_header("📈 Tren Perkembangan Donasi & Akad", "Analisis interaktif pendapatan dan partisipasi donatur Mizan Amanah.")
     
     col1, col2 = st.columns([1, 3])
     with col1:
@@ -157,40 +157,52 @@ if menu == "Tren & Perkembangan":
     ).reset_index()
     tren_donasi[col_waktu] = tren_donasi[col_waktu].astype(str)
     
-    st.markdown("### Perkembangan Total Donasi & Donatur")
-    text_label = 'Total_Donasi' if resolusi == "Tahunan" else None
+    # Membagi nilai nominal dengan 1 Juta khusus untuk sumbu Y agar ringkas
+    tren_donasi['Total_Juta'] = tren_donasi['Total_Donasi'] / 1e6
     
-    fig_trend = px.line(tren_donasi, x=col_waktu, y='Total_Donasi', text=text_label,
+    st.markdown("### Perkembangan Total Donasi & Donatur")
+    
+    # Menggunakan Total_Juta untuk Y, tetapi menyimpan Total_Donasi asli di custom_data
+    fig_trend = px.line(tren_donasi, x=col_waktu, y='Total_Juta', custom_data=['Total_Donasi'],
                         markers=True, title=f"Tren Donasi ({resolusi})",
-                        labels={'Total_Donasi': 'Total Nominal (Rp)', col_waktu: 'Periode'})
+                        labels={'Total_Juta': 'Total Nominal', col_waktu: 'Periode'})
     
     if resolusi == "Tahunan":
+        # Menampilkan angka penuh (detail) pada titik di atas grafik tahunan
         fig_trend.update_traces(
             textposition="top center", 
-            text=[f"Rp {val/1e6:,.0f} Juta" for val in tren_donasi['Total_Donasi']], 
-            textfont=dict(size=14, weight='bold'),
+            text=[f"Rp {val:,.0f}" for val in tren_donasi['Total_Donasi']], 
+            textfont=dict(size=13, weight='bold'),
             line=dict(color='#D4AF37')
         )
-        fig_trend.update_layout(yaxis_range=[0, tren_donasi['Total_Donasi'].max() * 1.2])
+        fig_trend.update_layout(yaxis_range=[0, tren_donasi['Total_Juta'].max() * 1.2])
     else:
         marker_size = 6 if resolusi == "Bulanan" else 2
         fig_trend.update_traces(marker=dict(size=marker_size), line=dict(color='#D4AF37'))
 
-    fig_trend.update_traces(line=dict(width=3), hovertemplate='<b>Periode: %{x}</b><br>Total Donasi: <b>Rp %{y:,.0f}</b><extra></extra>')
-    fig_trend.update_layout(hovermode="x unified", yaxis_tickformat='20') 
+    # Hover memanggil customdata[0] agar nominal asli tetap terlihat detail
+    fig_trend.update_traces(line=dict(width=3), hovertemplate='<b>Periode: %{x}</b><br>Total Donasi: <b>Rp %{customdata[0]:,.0f}</b><extra></extra>')
+    
+    # Memasang akhiran " Jt" di sumbu Y
+    fig_trend.update_layout(hovermode="x unified", yaxis=dict(ticksuffix=" Jt")) 
     
     st.plotly_chart(fig_trend, use_container_width=True)
     
     st.markdown("### Komposisi Donasi Berdasarkan Akad")
     akad_tren = data.groupby([col_waktu, 'akad'])['nominal'].sum().reset_index()
     
-    fig_akad = px.bar(akad_tren, x=col_waktu, y='nominal', color='akad',
+    # Sama seperti grafik garis, bagi 1 juta untuk bar chart sumbu y
+    akad_tren['nominal_juta'] = akad_tren['nominal'] / 1e6
+    
+    fig_akad = px.bar(akad_tren, x=col_waktu, y='nominal_juta', color='akad', custom_data=['nominal'],
                       title=f"Distribusi Akad per Periode ({resolusi})",
-                      labels={'nominal': 'Total Nominal (Rp)', col_waktu: 'Periode'},
+                      labels={'nominal_juta': 'Total Nominal', col_waktu: 'Periode'},
                       barmode='stack', color_discrete_sequence=elegant_colors)
                       
-    fig_akad.update_traces(hovertemplate='<b>%{x}</b><br>Akad: %{data.name}<br>Total: <b>Rp %{y:,.0f}</b><extra></extra>')
-    fig_akad.update_layout(hovermode="x unified", yaxis_tickformat='20')
+    fig_akad.update_traces(hovertemplate='<b>%{x}</b><br>Akad: %{data.name}<br>Total: <b>Rp %{customdata[0]:,.0f}</b><extra></extra>')
+    
+    # Memasang akhiran " Jt" di sumbu Y
+    fig_akad.update_layout(hovermode="x unified", yaxis=dict(ticksuffix=" Jt"))
     st.plotly_chart(fig_akad, use_container_width=True)
 
 elif menu == "Klasifikasi & Segmentasi RFM":
