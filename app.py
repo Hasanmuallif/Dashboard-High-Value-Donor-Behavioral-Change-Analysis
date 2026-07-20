@@ -18,17 +18,14 @@ st.set_page_config(
 # Custom CSS yang support Dark Mode & Light Mode
 st.markdown("""
     <style>
-    /* Mengatur font tetapi membiarkan Streamlit mengatur warna otomatis (support Dark Mode) */
     h1, h2, h3 {
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
-    /* Pembatas (Divider) bernuansa Gold/Champagne */
     hr {
         border-top: 2px solid #D4AF37 !important;
         border-radius: 5px;
         opacity: 0.7;
     }
-    /* Warna Tab Streamlit */
     .stTabs [data-baseweb="tab-list"] button[aria-selected="true"] {
         border-bottom-color: #D4AF37 !important;
     }
@@ -36,7 +33,6 @@ st.markdown("""
         color: #D4AF37 !important;
         font-weight: bold;
     }
-    /* Penempatan logo kanan atas */
     .logo-container {
         display: flex;
         justify-content: flex-end;
@@ -46,7 +42,6 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Palet warna elegan untuk grafik
 elegant_colors = ['#2C3E50', '#D4AF37', '#5D6D7E', '#7F8C8D', '#1A5276', '#935116']
 
 def display_header(title, description):
@@ -94,7 +89,7 @@ with st.spinner("Memuat data Mizan Amanah..."):
     data_raw = load_and_clean_data()
 
 # ==========================================
-# 2. SIDEBAR & FILTER GLOBAL (URUTAN BARU)
+# 2. SIDEBAR & FILTER GLOBAL
 # ==========================================
 col_sb1, col_sb2, col_sb3 = st.sidebar.columns([1, 4, 1])
 with col_sb2:
@@ -102,14 +97,12 @@ with col_sb2:
     
 st.sidebar.markdown("---")
 
-# 1. Navigasi Dashboard (Di Atas)
 menu = st.sidebar.radio(
     "📂 Navigasi Dashboard",
     ["Tren & Perkembangan", "Klasifikasi & Segmentasi RFM", "Pergerakan Donatur & Action Plan"]
 )
 st.sidebar.markdown("---")
 
-# 2. Filter Akad & Program (Di Bawah)
 st.sidebar.subheader("⚙️ Filter Data")
 selected_akad = st.sidebar.multiselect("Pilih Akad:", options=data_raw['akad'].dropna().unique(), default=data_raw['akad'].dropna().unique())
 selected_program = st.sidebar.multiselect("Pilih Program:", options=data_raw['program'].dropna().unique(), default=data_raw['program'].dropna().unique())
@@ -153,7 +146,7 @@ if menu == "Tren & Perkembangan":
     
     col1, col2 = st.columns([1, 3])
     with col1:
-        resolusi = st.selectbox("Pilih Periode Waktu:", ["Tahunan", "Bulanan", "Harian"])
+        resolusi = st.selectbox("Lihat Berdasarkan:", ["Tahunan", "Bulanan", "Harian"])
     
     res_map = {"Tahunan": "Tahun", "Bulanan": "Bulan", "Harian": "Hari"}
     col_waktu = res_map[resolusi]
@@ -172,7 +165,6 @@ if menu == "Tren & Perkembangan":
                         labels={'Total_Donasi': 'Total Nominal (Rp)', col_waktu: 'Periode'})
     
     if resolusi == "Tahunan":
-        # Format "Juta" untuk tampilan label atas
         fig_trend.update_traces(
             textposition="top center", 
             text=[f"Rp {val/1e6:,.0f} Juta" for val in tren_donasi['Total_Donasi']], 
@@ -185,7 +177,7 @@ if menu == "Tren & Perkembangan":
         fig_trend.update_traces(marker=dict(size=marker_size), line=dict(color='#D4AF37'))
 
     fig_trend.update_traces(line=dict(width=3), hovertemplate='<b>Periode: %{x}</b><br>Total Donasi: <b>Rp %{y:,.0f}</b><extra></extra>')
-    fig_trend.update_layout(hovermode="x unified", yaxis_tickformat='20') # Menghindari huruf "M"
+    fig_trend.update_layout(hovermode="x unified", yaxis_tickformat='20') 
     
     st.plotly_chart(fig_trend, use_container_width=True)
     
@@ -226,6 +218,12 @@ elif menu == "Klasifikasi & Segmentasi RFM":
     with col2:
         tier_count = rfm['Tier'].value_counts().reset_index()
         tier_count.columns = ['Tier', 'Count']
+        
+        # LOGIKA SORTING TIER: Mengubah kolom Tier menjadi tipe Categorical agar berurutan sesuai hierarki
+        tier_order = ['Diamond Donor', 'Platinum Donor', 'Gold Donor', 'Silver Donor', 'Bronze Donor']
+        tier_count['Tier'] = pd.Categorical(tier_count['Tier'], categories=tier_order, ordered=True)
+        tier_count = tier_count.sort_values('Tier')
+        
         tier_colors = {
             'Diamond Donor':'#1ABC9C',   
             'Platinum Donor':'#7F8C8D',  
@@ -236,7 +234,9 @@ elif menu == "Klasifikasi & Segmentasi RFM":
         fig_donut = px.pie(tier_count, names='Tier', values='Count', hole=0.45,
                            title="Klasifikasi Tier (Total Skor RFM)",
                            color='Tier', color_discrete_map=tier_colors)
-        fig_donut.update_traces(textposition='inside', textinfo='percent+label')
+        
+        # sort=False memastikan Plotly mengikuti urutan DataFrame yang sudah disortir (Diamond ke Bronze)
+        fig_donut.update_traces(textposition='inside', textinfo='percent+label', sort=False)
         st.plotly_chart(fig_donut, use_container_width=True)
 
     st.markdown("---")
@@ -253,9 +253,10 @@ elif menu == "Klasifikasi & Segmentasi RFM":
 elif menu == "Pergerakan Donatur & Action Plan":
     display_header("🔄 Pergerakan Donatur & Action Plan", "Pantau retensi, pergerakan klasifikasi, dan daftar prioritas donatur (High Value & At-Risk).")
     
+    # PERUBAHAN LABEL: Menggunakan bahasa yang lebih user-friendly
     col1, col2, col3 = st.columns(3)
     with col1:
-        agregasi = st.selectbox("Lihat Berdasarkan :", ["Tahunan", "Bulanan", "Harian"])
+        agregasi = st.selectbox("Lihat Berdasarkan:", ["Tahunan", "Bulanan", "Harian"])
     
     res_map = {"Tahunan": "Tahun", "Bulanan": "Bulan", "Harian": "Hari"}
     col_waktu = res_map[agregasi]
@@ -263,14 +264,13 @@ elif menu == "Pergerakan Donatur & Action Plan":
     periode_unik = sorted(data[col_waktu].astype(str).unique())
     
     with col2:
-        periode_awal = st.selectbox("Dari Periode :", options=periode_unik, index=0)
+        periode_awal = st.selectbox("Dari Periode:", options=periode_unik, index=0)
     with col3:
-        periode_akhir = st.selectbox("Ke Periode :", options=periode_unik, index=len(periode_unik)-1)
+        periode_akhir = st.selectbox("Dibandingkan Dengan:", options=periode_unik, index=len(periode_unik)-1)
         
     if periode_awal == periode_akhir:
         st.warning("Silakan pilih Periode Pembanding yang berbeda dengan Periode Dasar.")
     else:
-        # Kalkulasi Perbandingan
         df_awal = data[data[col_waktu].astype(str) == periode_awal].groupby('donor_id')['nominal'].sum().reset_index()
         df_awal.rename(columns={'nominal': 'Nominal_Awal'}, inplace=True)
         df_akhir = data[data[col_waktu].astype(str) == periode_akhir].groupby('donor_id')['nominal'].sum().reset_index()
@@ -297,7 +297,6 @@ elif menu == "Pergerakan Donatur & Action Plan":
             st.subheader("Top 10 High Value Donors")
             st.caption("Berdasarkan total histori nominal keseluruhan.")
             top_high_value = rfm.sort_values('Monetary', ascending=False).head(10)[['donor_id', 'Segment', 'Monetary']]
-            # Format Rupiah
             top_high_value['Monetary'] = top_high_value['Monetary'].apply(lambda x: f"Rp {x:,.0f}")
             st.dataframe(top_high_value, use_container_width=True, hide_index=True)
 
@@ -313,7 +312,6 @@ elif menu == "Pergerakan Donatur & Action Plan":
         # --- GRAFIK PERGERAKAN PENDONOR PER BULAN (STACKED AREA) ---
         st.markdown("### 📊 Tren Pergerakan Segmen Pendonor per Bulan")
         
-        # Agregasi data aktif per bulan gabung segmentasi global
         df_area = data.groupby(['Bulan', 'donor_id'])['nominal'].sum().reset_index()
         df_area = pd.merge(df_area, rfm[['donor_id', 'Segment']], on='donor_id', how='left')
         area_chart_data = df_area.groupby(['Bulan', 'Segment'])['donor_id'].nunique().reset_index()
