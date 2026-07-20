@@ -338,18 +338,17 @@ elif menu == "Pergerakan Donatur & Action Plan":
             fig_status = px.pie(status_count, names='Status', values='Jumlah', hole=0.5,
                                 color='Status', color_discrete_map=status_colors, title=f"Proporsi {periode_awal} ➡️ {periode_akhir}")
             
+            # --- FIX: LOGIKA TEKS LUAR AGAR RAPI DAN TERBACA ---
             fig_status.update_traces(
                 textinfo='percent+label', 
-                textposition='inside', # Paksa teks berada di dalam irisan
+                textposition='auto', # Menarik teks ke luar menggunakan garis secara cerdas jika irisan sempit
                 hovertemplate='<b>%{label}</b><br>Jumlah Donatur: %{value}<br>Persentase: %{percent}<extra></extra>',
                 pull=[0.05 if s == 'Hilang (Churn)' else 0 for s in status_count['Status']]
             )
             
             fig_status.update_layout(
-                uniformtext_minsize=11, 
-                uniformtext_mode='hide', # Otomatis menyembunyikan teks jika irisan terlalu kecil (mencegah overlap)
-                margin=dict(t=40, b=10, l=10, r=10),
-                showlegend=True
+                margin=dict(t=50, b=50, l=90, r=90), # Ruang ekstra di sisi kiri-kanan agar teks tidak terpotong
+                showlegend=False # Menyembunyikan legend untuk memberikan ruang maksimal pada grafik dan garis teks
             )
             # ---------------------------------------------------------
             
