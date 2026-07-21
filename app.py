@@ -361,23 +361,17 @@ elif menu == "Pergerakan Donatur & Action Plan":
 
         st.markdown("---")
 
-        # --- GRAFIK PERGERAKAN PENDONOR (STACKED AREA) ---
-        st.markdown(f"### 📊 Tren Pergerakan Segmen Pendonor ({agregasi})")
+        # --- GRAFIK PERGERAKAN PENDONOR PER BULAN (STACKED AREA) ---
+        st.markdown("### 📊 Tren Pergerakan Segmen Pendonor per Bulan")
         
-        # Mengubah hardcode 'Bulan' menjadi variabel dinamis col_waktu
-        df_area = data.groupby([col_waktu, 'donor_id'])['nominal'].sum().reset_index()
+        df_area = data.groupby(['Bulan', 'donor_id'])['nominal'].sum().reset_index()
         df_area = pd.merge(df_area, rfm[['donor_id', 'Segment']], on='donor_id', how='left')
-        area_chart_data = df_area.groupby([col_waktu, 'Segment'])['donor_id'].nunique().reset_index()
+        area_chart_data = df_area.groupby(['Bulan', 'Segment'])['donor_id'].nunique().reset_index()
         
-        fig_area = px.area(area_chart_data, x=col_waktu, y='donor_id', color='Segment',
-                           title=f"Jumlah Pendonor Aktif berdasarkan {agregasi} & Segmen",
-                           labels={'donor_id': 'Jumlah Donatur', col_waktu: 'Periode'})
-        
-        # Mengatur hover dan memastikan sumbu X tidak memunculkan angka desimal
-        fig_area.update_layout(
-            hovermode="x unified",
-            xaxis=dict(type='category') 
-        )
+        fig_area = px.area(area_chart_data, x='Bulan', y='donor_id', color='Segment',
+                           title="Jumlah Pendonor Aktif berdasarkan Bulan & Segmen",
+                           labels={'donor_id': 'Jumlah Donatur', 'Bulan': 'Tahun-Bulan'})
+        fig_area.update_layout(hovermode="x unified")
         st.plotly_chart(fig_area, use_container_width=True)
 
        # --- SUMMARY & ACTION PLAN ---
